@@ -1,0 +1,75 @@
+name: Windows Runtime Assembly
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/runtime-assembly.yml
+      - cmd/phite-runtime-pack/**
+      - internal/runtimepack/**
+      - runtime/manifest.json
+      - runtime/windows-x64/**
+      - scripts/verify-windows-runtime.ps1
+      - tests/runtime_pack*.go
+
+permissions:
+  contents: read
+
+jobs:
+  assemble:
+    name: Assemble and execute Windows x64 runtime
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Download pinned upstream artifact
+        shell: pwsh
+        run: |
+          $source = Get-Content -Raw runtime/windows-x64/source.json | ConvertFrom-Json
+          $recipe = Get-Content -Raw runtime/windows-x64/recipe.json | ConvertFrom-Json
+          if ($source.artifact_sha256 -ne $recipe.artifact.sha256) {
+            throw "Source and recipe checksums disagree"
+          }
+          $artifact = Join-Path $env:RUNNER_TEMP $recipe.artifact.name
+          Invoke-WebRequest -Uri $source.artifact_url -OutFile $artifact
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $artifact).Hash.ToLowerInvariant()
+          if ($actual -ne $source.artifact_sha256) {
+            throw "Upstream checksum mismatch: expected $($source.artifact_sha256), got $actual"
+          }
+
+      - name: Assemble verified release assets
+        shell: pwsh
+        run: |
+          $recipe = Get-Content -Raw runtime/windows-x64/recipe.json | ConvertFrom-Json
+          $artifact = Join-Path $env:RUNNER_TEMP $recipe.artifact.name
+          $output = Join-Path $env:RUNNER_TEMP 'phite-runtime-dist'
+          go run ./cmd/phite-runtime-pack assemble --recipe runtime/windows-x64/recipe.json --artifact $artifact --output $output
+
+          $expectedManifest = (Get-FileHash -Algorithm SHA256 -LiteralPath runtime/manifest.json).Hash
+          $actualManifest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $output 'runtime-manifest.json')).Hash
+          if ($actualManifest -ne $expectedManifest) {
+            throw "Generated Runtime Manifest differs from the committed manifest"
+          }
+
+      - name: Verify complete Runtime Identity
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'phite-runtime-dist'
+          ./scripts/verify-windows-runtime.ps1 `
+            -ManifestPath (Join-Path $output 'runtime-manifest.json') `
+            -ArtifactPath (Join-Path $output 'frankenphp-windows-x86_64.zip')
+
+      - name: Upload assembled release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: phite-runtime-windows-x64
+          path: ${{ runner.temp }}/phite-runtime-dist/*
+          if-no-files-found: error

@@ -1,0 +1,6 @@
+{
+  "frankenphp_release": "v1.12.7",
+  "frankenphp_commit": "a765b086f5cc56f6b7753117367d56e1b0da948d",
+  "artifact_url": "https://github.com/php/frankenphp/releases/download/v1.12.7/frankenphp-windows-x86_64.zip",
+  "artifact_sha256": "edec8d3c43508f98b498af911f47aa93ebc51f7e46f1d26a9d41adb7ccbaa828"
+}

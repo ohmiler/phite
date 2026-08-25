@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "runtimes": [
+    {
+      "identity": {
+        "id": "frankenphp-1.12.7-php-8.5.9-windows-x64",
+        "frankenphp_version": "1.12.7",
+        "php_version": "8.5.9",
+        "caddy_version": "2.11.4",
+        "os": "windows",
+        "arch": "x64",
+        "support": "tier1",
+        "extensions": [
+          "bcmath",
+          "calendar",
+          "Core",
+          "ctype",
+          "curl",
+          "date",
+          "dom",
+          "fileinfo",
+          "filter",
+          "hash",
+          "iconv",
+          "intl",
+          "json",
+          "lexbor",
+          "libxml",
+          "mbstring",
+          "mysqlnd",
+          "openssl",
+          "pcre",
+          "PDO",
+          "pdo_sqlite",
+          "Phar",
+          "random",
+          "readline",
+          "Reflection",
+          "session",
+          "SimpleXML",
+          "SPL",
+          "sqlite3",
+          "standard",
+          "tokenizer",
+          "uri",
+          "xml",
+          "xmlreader",
+          "xmlwriter",
+          "Zend OPcache",
+          "zip",
+          "zlib"
+        ]
+      },
+      "artifact": {
+        "name": "frankenphp-windows-x86_64.zip",
+        "url": "https://github.com/ohmiler/phite/releases/download/runtime-windows-x64-1.12.7-php-8.5.9/frankenphp-windows-x86_64.zip",
+        "sha256": "edec8d3c43508f98b498af911f47aa93ebc51f7e46f1d26a9d41adb7ccbaa828"
+      },
+      "notices": {
+        "name": "third-party-notices-windows-x64.zip",
+        "url": "https://github.com/ohmiler/phite/releases/download/runtime-windows-x64-1.12.7-php-8.5.9/third-party-notices-windows-x64.zip",
+        "sha256": "fe2f621f67b16ff35e303558aabb85a99e30dd2362909ecbcf32fd3a7969a77a"
+      }
+    }
+  ]
+}

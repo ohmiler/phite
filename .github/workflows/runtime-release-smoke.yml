@@ -1,0 +1,126 @@
+name: Windows Runtime Release Smoke
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Runtime release tag to verify
+        required: true
+        default: runtime-windows-x64-1.12.7-php-8.5.9
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Fetch and execute published Windows x64 runtime
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'runtime-windows-x64-')
+    runs-on: windows-latest
+    env:
+      RUNTIME_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'phite-runtime-release'
+          New-Item -ItemType Directory -Path $release | Out-Null
+          gh release download $env:RUNTIME_TAG --repo $env:GITHUB_REPOSITORY --dir $release
+
+      - name: Match the committed manifest and exact asset set
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'phite-runtime-release'
+          $publishedManifestPath = Join-Path $release 'runtime-manifest.json'
+          $committedManifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath runtime/manifest.json).Hash
+          $publishedManifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $publishedManifestPath).Hash
+          if ($publishedManifestHash -ne $committedManifestHash) {
+            throw "Published Runtime Manifest differs from the committed manifest"
+          }
+
+          $manifest = Get-Content -Raw -LiteralPath $publishedManifestPath | ConvertFrom-Json
+          $runtime = @($manifest.runtimes)[0]
+          $expectedAssets = @(
+            'SHA256SUMS'
+            'runtime-manifest.json'
+            $runtime.artifact.name
+            $runtime.notices.name
+          ) | Sort-Object
+          $actualAssets = @(
+            Get-ChildItem -LiteralPath $release -File | ForEach-Object { $_.Name }
+          ) | Sort-Object
+          $assetDifference = @(Compare-Object -ReferenceObject $expectedAssets -DifferenceObject $actualAssets)
+          if ($assetDifference.Count -ne 0) {
+            throw ("Published release asset set differs from the Runtime Manifest:{0}{1}" -f [Environment]::NewLine, ($assetDifference | Out-String))
+          }
+
+      - name: Verify exact published checksums
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'phite-runtime-release'
+          $manifest = Get-Content -Raw -LiteralPath (Join-Path $release 'runtime-manifest.json') | ConvertFrom-Json
+          $runtime = @($manifest.runtimes)[0]
+          $checksums = @{}
+          foreach ($line in Get-Content -LiteralPath (Join-Path $release 'SHA256SUMS')) {
+            $parts = $line -split '\s{2}', 2
+            if ($parts.Count -ne 2 -or $parts[0] -notmatch '^[0-9a-f]{64}$') {
+              throw "Malformed checksum line: $line"
+            }
+            if ($checksums.ContainsKey($parts[1])) {
+              throw "Duplicate checksum entry: $($parts[1])"
+            }
+            $checksums[$parts[1]] = $parts[0]
+          }
+
+          $expectedChecksumNames = @(
+            'runtime-manifest.json'
+            $runtime.artifact.name
+            $runtime.notices.name
+          ) | Sort-Object
+          $actualChecksumNames = @($checksums.Keys) | Sort-Object
+          $checksumDifference = @(Compare-Object -ReferenceObject $expectedChecksumNames -DifferenceObject $actualChecksumNames)
+          if ($checksumDifference.Count -ne 0) {
+            throw ("Published checksum entries differ from the Runtime Manifest:{0}{1}" -f [Environment]::NewLine, ($checksumDifference | Out-String))
+          }
+          if ($checksums[$runtime.artifact.name] -ne $runtime.artifact.sha256) {
+            throw "Artifact checksum entry differs from the Runtime Manifest"
+          }
+          if ($checksums[$runtime.notices.name] -ne $runtime.notices.sha256) {
+            throw "Notices checksum entry differs from the Runtime Manifest"
+          }
+
+          foreach ($name in $expectedChecksumNames) {
+            $asset = Join-Path $release $name
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash.ToLowerInvariant()
+            if ($actual -ne $checksums[$name]) {
+              throw ("Checksum mismatch for {0}: expected {1}, got {2}" -f $name, $checksums[$name], $actual)
+            }
+          }
+
+      - name: Verify immutable asset locations
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'phite-runtime-release'
+          $manifest = Get-Content -Raw -LiteralPath (Join-Path $release 'runtime-manifest.json') | ConvertFrom-Json
+          $runtime = @($manifest.runtimes)[0]
+          $artifactSuffix = "/releases/download/$env:RUNTIME_TAG/$($runtime.artifact.name)"
+          $noticesSuffix = "/releases/download/$env:RUNTIME_TAG/$($runtime.notices.name)"
+          if (-not $runtime.artifact.url.EndsWith($artifactSuffix)) {
+            throw "Runtime artifact URL does not identify this immutable release"
+          }
+          if (-not $runtime.notices.url.EndsWith($noticesSuffix)) {
+            throw "Runtime notices URL does not identify this immutable release"
+          }
+
+      - name: Verify complete downloaded Runtime Identity
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'phite-runtime-release'
+          ./scripts/verify-windows-runtime.ps1 -ManifestPath (Join-Path $release 'runtime-manifest.json') -ArtifactPath (Join-Path $release 'frankenphp-windows-x86_64.zip')
