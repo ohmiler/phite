@@ -230,7 +230,7 @@ func writeRuntimeCommandManifest(t *testing.T, artifactURL, artifactSHA string) 
         "os": %q,
         "arch": %q,
         "support": "tier1",
-        "extensions": ["pdo_sqlite"]
+        "extensions": ["Core"]
       },
       "artifact": {
         "name": "runtime.zip",

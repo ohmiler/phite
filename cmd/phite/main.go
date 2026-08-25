@@ -67,7 +67,7 @@ func runPHP(arguments []string) int {
 		fmt.Fprintf(os.Stderr, "phite php: %v\n", err)
 		return 1
 	}
-	return runChild("phite php", installation.PHP, arguments)
+	return runChild("phite php", installation.PHP, installation.Environment(os.Environ()), arguments)
 }
 
 func runComposer(arguments []string) int {
@@ -92,11 +92,12 @@ func runComposer(arguments []string) int {
 		return 1
 	}
 	childArguments := append([]string{composerInstallation.PHAR}, arguments...)
-	return runChild("phite composer", installation.PHP, childArguments)
+	return runChild("phite composer", installation.PHP, installation.Environment(os.Environ()), childArguments)
 }
 
-func runChild(label, executable string, arguments []string) int {
+func runChild(label, executable string, environment, arguments []string) int {
 	command := exec.Command(executable, arguments...)
+	command.Env = environment
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr

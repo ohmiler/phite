@@ -26,7 +26,7 @@ func main() {
 		os.Exit(92)
 	}
 
-	fmt.Printf("cwd=%s\nargs=%s\nstdin=%s", workingDirectory, arguments, input)
+	fmt.Printf("cwd=%s\nargs=%s\nphprc=%s\nscan=%s\nstdin=%s", workingDirectory, arguments, os.Getenv("PHPRC"), os.Getenv("PHP_INI_SCAN_DIR"), input)
 	fmt.Fprintln(os.Stderr, "fake php stderr")
 
 	for _, argument := range os.Args[1:] {

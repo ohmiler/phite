@@ -25,8 +25,10 @@ type Manager struct {
 }
 
 type Installation struct {
-	Identity Identity
-	PHP      string
+	Identity      Identity
+	PHP           string
+	configuration string
+	scanDirectory string
 }
 
 type verifiedMarker struct {
@@ -100,7 +102,14 @@ func (manager *Manager) Acquire(ctx context.Context) (Installation, error) {
 	if err != nil {
 		return Installation{}, err
 	}
-	return Installation{Identity: manager.runtime.Identity, PHP: phpPath}, nil
+	configurationPath, scanDirectory, err := manager.ensurePHPConfiguration(filepath.Dir(phpPath))
+	if err != nil {
+		return Installation{}, err
+	}
+	return Installation{
+		Identity: manager.runtime.Identity, PHP: phpPath,
+		configuration: configurationPath, scanDirectory: scanDirectory,
+	}, nil
 }
 
 func (manager *Manager) Installed() (Identity, bool, error) {
