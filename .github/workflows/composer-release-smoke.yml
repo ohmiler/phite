@@ -124,10 +124,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               throw "phite composer install failed"
             }
-            $result = & $binary php -r "require 'vendor/autoload.php'; echo Phite\\Fixture\\Dependency::value();"
+            $result = & $binary php -r "require 'vendor/autoload.php'; echo Phite\Fixture\Dependency::value();"
             if ($LASTEXITCODE -ne 0 -or $result -ne 'installed') {
               throw "Installed fixture dependency did not execute through Managed PHP: $result"
             }
           } finally {
             Pop-Location
           }
+
+
