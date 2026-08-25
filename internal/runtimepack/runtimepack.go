@@ -252,6 +252,7 @@ func collectNoticeEntries(recipeDir, artifactPath string, notices notices) ([]no
 			return nil, fmt.Errorf("notice file %q is empty", relative)
 		}
 		if relative == notices.Inventory {
+			data = canonicalInventory(data)
 			if err := validateInventory(data); err != nil {
 				return nil, err
 			}
