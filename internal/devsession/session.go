@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -38,27 +37,7 @@ type processState struct {
 }
 
 func DiscoverProject(directory string) (Project, error) {
-	absolute, err := filepath.Abs(directory)
-	if err != nil {
-		return Project{}, fmt.Errorf("resolve PHP Project directory: %w", err)
-	}
-	absolute = filepath.Clean(absolute)
-	for _, candidate := range []struct {
-		root       string
-		entrypoint string
-	}{
-		{root: filepath.Join(absolute, "public"), entrypoint: filepath.Join(absolute, "public", "index.php")},
-		{root: absolute, entrypoint: filepath.Join(absolute, "index.php")},
-	} {
-		info, statErr := filepathInfo(candidate.entrypoint)
-		if statErr == nil && !info.IsDir() {
-			return Project{Directory: absolute, DocumentRoot: candidate.root, Entrypoint: candidate.entrypoint}, nil
-		}
-		if statErr != nil && !isNotExist(statErr) {
-			return Project{}, fmt.Errorf("inspect Entrypoint %s: %w", candidate.entrypoint, statErr)
-		}
-	}
-	return Project{}, errors.New("Supported Project requires a conventional Entrypoint at public/index.php or index.php")
+	return discoverProject(directory)
 }
 
 func Run(ctx context.Context, options Options) error {

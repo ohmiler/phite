@@ -50,7 +50,8 @@ func TestDiscoverProjectUsesConventionalFrontController(t *testing.T) {
 
 func TestDiscoverProjectExplainsMissingEntrypoint(t *testing.T) {
 	_, err := DiscoverProject(t.TempDir())
-	if err == nil || !strings.Contains(err.Error(), "public/index.php or index.php") {
+	if err == nil || !strings.Contains(err.Error(), "public/index.php, web/index.php, or index.php") ||
+		!strings.Contains(err.Error(), "phite.yaml") {
 		t.Fatalf("expected actionable Entrypoint error, got %v", err)
 	}
 }
