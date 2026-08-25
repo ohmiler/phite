@@ -32,6 +32,7 @@ func TestPHPCommandDownloadsVerifiesCachesAndPreservesProcessContract(t *testing
 	manifest := writeRuntimeCommandManifest(t, server.URL+"/runtime.zip", artifactSHA)
 	binary := buildPhiteWithManifest(t, manifest)
 	project := t.TempDir()
+	project = canonicalPath(t, project)
 
 	command := exec.Command(binary, "php", "script with spaces.php", "--exit=7")
 	command.Dir = project
