@@ -27,6 +27,7 @@ type Manager struct {
 type Installation struct {
 	Identity      Identity
 	PHP           string
+	FrankenPHP    string
 	configuration string
 	scanDirectory string
 }
@@ -108,6 +109,7 @@ func (manager *Manager) Acquire(ctx context.Context) (Installation, error) {
 	}
 	return Installation{
 		Identity: manager.runtime.Identity, PHP: phpPath,
+		FrankenPHP:    manager.frankenPHPPath(filepath.Dir(phpPath)),
 		configuration: configurationPath, scanDirectory: scanDirectory,
 	}, nil
 }
@@ -285,7 +287,14 @@ func (manager *Manager) validExtraction(artifactPath string) (bool, error) {
 }
 
 func (manager *Manager) phpPath(extractedDirectory string) string {
-	name := "php"
+	return manager.executablePath(extractedDirectory, "php")
+}
+
+func (manager *Manager) frankenPHPPath(extractedDirectory string) string {
+	return manager.executablePath(extractedDirectory, "frankenphp")
+}
+
+func (manager *Manager) executablePath(extractedDirectory, name string) string {
 	if manager.runtime.Identity.OS == "windows" || goruntime.GOOS == "windows" {
 		name += ".exe"
 	}

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 
 	composercatalog "github.com/ohmiler/phite/composer"
+	"github.com/ohmiler/phite/internal/devsession"
 	"github.com/ohmiler/phite/internal/managedcomposer"
 	"github.com/ohmiler/phite/internal/managedruntime"
 	runtimecatalog "github.com/ohmiler/phite/runtime"
@@ -31,7 +33,10 @@ func run(arguments []string) int {
 	if len(arguments) >= 1 && arguments[0] == "composer" {
 		return runComposer(arguments[1:])
 	}
-	fmt.Fprintln(os.Stderr, "Usage: phite <version|php|composer> [arguments...]")
+	if len(arguments) == 1 && arguments[0] == "dev" {
+		return runDev()
+	}
+	fmt.Fprintln(os.Stderr, "Usage: phite <version|php|composer|dev> [arguments...]")
 	return 2
 }
 
@@ -93,6 +98,45 @@ func runComposer(arguments []string) int {
 	}
 	childArguments := append([]string{composerInstallation.PHAR}, arguments...)
 	return runChild("phite composer", installation.PHP, installation.Environment(os.Environ()), childArguments)
+}
+
+func runDev() int {
+	manager, err := runtimeManager()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "phite dev: %v\n", err)
+		return 1
+	}
+	projectDirectory, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "phite dev: locate PHP Project: %v\n", err)
+		return 1
+	}
+	project, err := devsession.DiscoverProject(projectDirectory)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "phite dev: %v\n", err)
+		return 1
+	}
+	installation, err := manager.Acquire(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "phite dev: %v\n", err)
+		return 1
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	err = devsession.Run(ctx, devsession.Options{
+		Project:     project,
+		FrankenPHP:  installation.FrankenPHP,
+		Environment: installation.Environment(os.Environ()),
+		Input:       os.Stdin,
+		Output:      os.Stdout,
+		ErrorOutput: os.Stderr,
+		OpenBrowser: devsession.OpenBrowser,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "phite dev: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func runChild(label, executable string, environment, arguments []string) int {
