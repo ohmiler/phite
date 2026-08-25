@@ -1,0 +1,127 @@
+name: Composer Assembly
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/composer-assembly.yml
+      - cmd/phite-composer-pack/**
+      - composer/**
+      - internal/composerpack/**
+      - scripts/*composer-notice*.php
+      - tests/composer_pack*.go
+
+permissions:
+  contents: read
+
+jobs:
+  assemble:
+    name: Assemble and execute Composer
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Download pinned Composer artifact
+        shell: pwsh
+        run: |
+          $source = Get-Content -Raw composer/2.10.2/source.json | ConvertFrom-Json
+          $recipe = Get-Content -Raw composer/2.10.2/recipe.json | ConvertFrom-Json
+          if ($source.version -ne $recipe.version -or $source.artifact_sha256 -ne $recipe.artifact.sha256) {
+            throw "Composer source and recipe identities disagree"
+          }
+          $artifact = Join-Path $env:RUNNER_TEMP $recipe.artifact.name
+          Invoke-WebRequest -Uri $source.artifact_url -OutFile $artifact
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $artifact).Hash.ToLowerInvariant()
+          if ($actual -ne $source.artifact_sha256) {
+            throw "Upstream Composer checksum mismatch: expected $($source.artifact_sha256), got $actual"
+          }
+
+      - name: Extract notices with the Managed Runtime
+        shell: pwsh
+        run: |
+          $runtimeManifest = Get-Content -Raw runtime/manifest.json | ConvertFrom-Json
+          $runtime = @($runtimeManifest.runtimes)[0]
+          $runtimeArchive = Join-Path $env:RUNNER_TEMP $runtime.artifact.name
+          Invoke-WebRequest -Uri $runtime.artifact.url -OutFile $runtimeArchive
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeArchive).Hash.ToLowerInvariant()
+          if ($actual -ne $runtime.artifact.sha256) {
+            throw "Managed Runtime checksum mismatch"
+          }
+          $runtimeDirectory = Join-Path $env:RUNNER_TEMP 'managed-php'
+          Expand-Archive -LiteralPath $runtimeArchive -DestinationPath $runtimeDirectory
+          $php = Join-Path $runtimeDirectory 'php.exe'
+          $composer = Join-Path $env:RUNNER_TEMP 'composer.phar'
+          $extracted = Join-Path $env:RUNNER_TEMP 'composer-notices-extracted'
+          & $php scripts/extract-composer-notices.php $composer $extracted
+          if ($LASTEXITCODE -ne 0) {
+            throw "Composer notice extraction failed"
+          }
+
+          $expectedRoot = (Resolve-Path composer/2.10.2).Path
+          $expected = @(
+            Get-Item -LiteralPath (Join-Path $expectedRoot 'inventory.json')
+            Get-ChildItem -LiteralPath (Join-Path $expectedRoot 'licenses') -File -Recurse
+          )
+          $actualFiles = @(Get-ChildItem -LiteralPath $extracted -File -Recurse)
+          $expectedHashes = @{}
+          foreach ($file in $expected) {
+            $relative = $file.FullName.Substring($expectedRoot.Length + 1).Replace('\', '/')
+            $expectedHashes[$relative] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash
+          }
+          $actualHashes = @{}
+          foreach ($file in $actualFiles) {
+            $relative = $file.FullName.Substring($extracted.Length + 1).Replace('\', '/')
+            $actualHashes[$relative] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash
+          }
+          $difference = @(Compare-Object -ReferenceObject @($expectedHashes.Keys | Sort-Object) -DifferenceObject @($actualHashes.Keys | Sort-Object))
+          if ($difference.Count -ne 0) {
+            throw "Extracted Composer notice file set differs from committed evidence"
+          }
+          foreach ($name in $expectedHashes.Keys) {
+            if ($expectedHashes[$name] -ne $actualHashes[$name]) {
+              throw "Extracted Composer notice differs from committed evidence: $name"
+            }
+          }
+
+      - name: Reject malicious PHAR notice paths
+        shell: pwsh
+        run: |
+          $php = Join-Path $env:RUNNER_TEMP 'managed-php/php.exe'
+          & $php -d phar.readonly=0 scripts/test-extract-composer-notices.php
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Malicious Composer PHAR containment test failed'
+          }
+
+      - name: Assemble verified release assets
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $env:RUNNER_TEMP 'composer.phar'
+          $output = Join-Path $env:RUNNER_TEMP 'phite-composer-dist'
+          go run ./cmd/phite-composer-pack assemble --recipe composer/2.10.2/recipe.json --artifact $artifact --output $output
+
+          $expectedManifest = (Get-FileHash -Algorithm SHA256 -LiteralPath composer/manifest.json).Hash
+          $actualManifest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $output 'composer-manifest.json')).Hash
+          if ($actualManifest -ne $expectedManifest) {
+            throw "Generated Composer Manifest differs from the committed manifest"
+          }
+
+          $php = Join-Path $env:RUNNER_TEMP 'managed-php/php.exe'
+          $version = & $php (Join-Path $output 'composer.phar') --version --no-ansi
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^Composer version 2\.10\.2 ') {
+            throw "Assembled Composer failed its Managed Runtime smoke test: $version"
+          }
+
+      - name: Upload assembled release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: phite-composer-2.10.2
+          path: ${{ runner.temp }}/phite-composer-dist/*
+          if-no-files-found: error

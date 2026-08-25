@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "composer": {
+    "version": "2.10.2",
+    "artifact": {
+      "name": "composer.phar",
+      "url": "https://github.com/ohmiler/phite/releases/download/composer-2.10.2/composer.phar",
+      "sha256": "5ee7125f8a30a34d246cefdc0bc85b8a783b28f2aec968994118512350d28027"
+    },
+    "notices": {
+      "name": "third-party-notices-composer-2.10.2.zip",
+      "url": "https://github.com/ohmiler/phite/releases/download/composer-2.10.2/third-party-notices-composer-2.10.2.zip",
+      "sha256": "563495c3321dffdf6dab36193d1c6024f21c1ea5f6fe3165bffa9bf0acb169ba"
+    }
+  }
+}

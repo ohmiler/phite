@@ -1,0 +1,8 @@
+{
+  "version": "2.10.2",
+  "release_date": "2026-07-01",
+  "artifact_url": "https://getcomposer.org/download/2.10.2/composer.phar",
+  "artifact_sha256": "5ee7125f8a30a34d246cefdc0bc85b8a783b28f2aec968994118512350d28027",
+  "source_url": "https://github.com/composer/composer/tree/2.10.2",
+  "source_commit": "8d4439f572a97670a9edc039eb3b093cc976b4bc"
+}

@@ -1,0 +1,133 @@
+name: Composer Release Smoke
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Composer release tag to verify
+        required: true
+        default: composer-2.10.2
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Fetch Composer and install a fixture Project
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'composer-')
+    runs-on: windows-latest
+    env:
+      COMPOSER_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'phite-composer-release'
+          New-Item -ItemType Directory -Path $release | Out-Null
+          gh release download $env:COMPOSER_TAG --repo $env:GITHUB_REPOSITORY --dir $release
+
+      - name: Match manifest, assets, checksums, and immutable URLs
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'phite-composer-release'
+          $publishedManifestPath = Join-Path $release 'composer-manifest.json'
+          $committedManifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath composer/manifest.json).Hash
+          $publishedManifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $publishedManifestPath).Hash
+          if ($publishedManifestHash -ne $committedManifestHash) {
+            throw "Published Composer Manifest differs from the committed manifest"
+          }
+          $manifest = Get-Content -Raw -LiteralPath $publishedManifestPath | ConvertFrom-Json
+          $composer = $manifest.composer
+          $expectedAssets = @('SHA256SUMS', 'composer-manifest.json', $composer.artifact.name, $composer.notices.name) | Sort-Object
+          $actualAssets = @(Get-ChildItem -LiteralPath $release -File | ForEach-Object { $_.Name }) | Sort-Object
+          if (@(Compare-Object -ReferenceObject $expectedAssets -DifferenceObject $actualAssets).Count -ne 0) {
+            throw "Published Composer asset set differs from the manifest"
+          }
+
+          $checksums = @{}
+          foreach ($line in Get-Content -LiteralPath (Join-Path $release 'SHA256SUMS')) {
+            $parts = $line -split '\s{2}', 2
+            if ($parts.Count -ne 2 -or $parts[0] -notmatch '^[0-9a-f]{64}$' -or $checksums.ContainsKey($parts[1])) {
+              throw "Malformed or duplicate checksum line: $line"
+            }
+            $checksums[$parts[1]] = $parts[0]
+          }
+          $expectedChecksumNames = @('composer-manifest.json', $composer.artifact.name, $composer.notices.name) | Sort-Object
+          if (@(Compare-Object -ReferenceObject $expectedChecksumNames -DifferenceObject @($checksums.Keys | Sort-Object)).Count -ne 0) {
+            throw "Published Composer checksum entries differ from the manifest"
+          }
+          if ($checksums[$composer.artifact.name] -ne $composer.artifact.sha256 -or $checksums[$composer.notices.name] -ne $composer.notices.sha256) {
+            throw "Published Composer checksums differ from the manifest"
+          }
+          foreach ($name in $expectedChecksumNames) {
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $release $name)).Hash.ToLowerInvariant()
+            if ($actual -ne $checksums[$name]) {
+              throw "Published Composer asset checksum mismatch: $name"
+            }
+          }
+          if (-not $composer.artifact.url.EndsWith("/releases/download/$env:COMPOSER_TAG/$($composer.artifact.name)")) {
+            throw "Composer artifact URL does not identify this immutable release"
+          }
+          if (-not $composer.notices.url.EndsWith("/releases/download/$env:COMPOSER_TAG/$($composer.notices.name)")) {
+            throw "Composer notices URL does not identify this immutable release"
+          }
+
+      - name: Install a dependency through Phite
+        shell: pwsh
+        run: |
+          $binary = Join-Path $env:RUNNER_TEMP 'phite.exe'
+          go build -o $binary ./cmd/phite
+          $project = Join-Path $env:RUNNER_TEMP 'composer-fixture'
+          $package = Join-Path $project 'packages/fixture-package'
+          New-Item -ItemType Directory -Path (Join-Path $package 'src') -Force | Out-Null
+          @'
+          {
+            "name": "phite/fixture-package",
+            "version": "1.0.0",
+            "autoload": {"psr-4": {"Phite\\Fixture\\": "src/"}}
+          }
+          '@ | Set-Content -LiteralPath (Join-Path $package 'composer.json') -Encoding utf8NoBOM
+          @'
+          <?php
+          namespace Phite\Fixture;
+          final class Dependency { public static function value(): string { return 'installed'; } }
+          '@ | Set-Content -LiteralPath (Join-Path $package 'src/Dependency.php') -Encoding utf8NoBOM
+          @'
+          {
+            "name": "phite/release-smoke",
+            "repositories": [
+              {"type": "path", "url": "packages/fixture-package", "options": {"symlink": false}},
+              {"packagist.org": false}
+            ],
+            "require": {"phite/fixture-package": "1.0.0"}
+          }
+          '@ | Set-Content -LiteralPath (Join-Path $project 'composer.json') -Encoding utf8NoBOM
+
+          $env:PHITE_RUNTIME_CACHE = Join-Path $env:RUNNER_TEMP 'phite-runtime-cache'
+          $env:PHITE_COMPOSER_CACHE = Join-Path $env:RUNNER_TEMP 'phite-composer-cache'
+          Push-Location $project
+          try {
+            & $binary composer install --no-interaction --no-progress --no-ansi
+            if ($LASTEXITCODE -ne 0) {
+              throw "phite composer install failed"
+            }
+            $result = & $binary php -r "require 'vendor/autoload.php'; echo Phite\\Fixture\\Dependency::value();"
+            if ($LASTEXITCODE -ne 0 -or $result -ne 'installed') {
+              throw "Installed fixture dependency did not execute through Managed PHP: $result"
+            }
+          } finally {
+            Pop-Location
+          }

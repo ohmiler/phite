@@ -8,3 +8,4 @@
 
 # Preserve third-party license/source bytes exactly as collected.
 runtime/windows-x64/licenses/** -text
+composer/*/licenses/** -text

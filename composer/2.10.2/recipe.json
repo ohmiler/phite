@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "version": "2.10.2",
+  "artifact": {
+    "name": "composer.phar",
+    "url": "https://github.com/ohmiler/phite/releases/download/composer-2.10.2/composer.phar",
+    "sha256": "5ee7125f8a30a34d246cefdc0bc85b8a783b28f2aec968994118512350d28027"
+  },
+  "notices": {
+    "name": "third-party-notices-composer-2.10.2.zip",
+    "url": "https://github.com/ohmiler/phite/releases/download/composer-2.10.2/third-party-notices-composer-2.10.2.zip",
+    "inventory": "inventory.json",
+    "files": [
+      "THIRD-PARTY-NOTICES.md",
+      "source.json",
+      "licenses/composer/LICENSE",
+      "licenses/composer/ca-bundle/LICENSE",
+      "licenses/composer/class-map-generator/LICENSE",
+      "licenses/composer/metadata-minifier/LICENSE",
+      "licenses/composer/pcre/LICENSE",
+      "licenses/composer/semver/LICENSE",
+      "licenses/composer/spdx-licenses/LICENSE",
+      "licenses/composer/xdebug-handler/LICENSE",
+      "licenses/justinrainbow/json-schema/LICENSE",
+      "licenses/marc-mabe/php-enum/LICENSE.txt",
+      "licenses/psr/container/LICENSE",
+      "licenses/psr/log/LICENSE",
+      "licenses/react/promise/LICENSE",
+      "licenses/seld/jsonlint/LICENSE",
+      "licenses/seld/phar-utils/LICENSE",
+      "licenses/seld/signal-handler/LICENSE",
+      "licenses/symfony/console/LICENSE",
+      "licenses/symfony/deprecation-contracts/LICENSE",
+      "licenses/symfony/filesystem/LICENSE",
+      "licenses/symfony/finder/LICENSE",
+      "licenses/symfony/polyfill-ctype/LICENSE",
+      "licenses/symfony/polyfill-intl-grapheme/LICENSE",
+      "licenses/symfony/polyfill-intl-normalizer/LICENSE",
+      "licenses/symfony/polyfill-mbstring/LICENSE",
+      "licenses/symfony/polyfill-php73/LICENSE",
+      "licenses/symfony/polyfill-php80/LICENSE",
+      "licenses/symfony/polyfill-php81/LICENSE",
+      "licenses/symfony/polyfill-php84/LICENSE",
+      "licenses/symfony/process/LICENSE",
+      "licenses/symfony/service-contracts/LICENSE",
+      "licenses/symfony/string/LICENSE"
+    ]
+  }
+}
